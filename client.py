@@ -11,9 +11,11 @@ BUFFER_SIZE = 1024
 # Ensure downloads folder exists
 os.makedirs("downloads", exist_ok=True)
 
+
 def connect_to_server():
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.settimeout(10)  # Set a 10-second timeout
         client_socket.connect((SERVER_HOST, SERVER_PORT))
         return client_socket
     except Exception as e:
@@ -53,10 +55,11 @@ def download_file():
                 with open(filepath, 'wb') as f:
                     while True:
                         data = client_socket.recv(BUFFER_SIZE)
-                        if not data:
+                        if data == b"EOF":  # Detect end-of-file marker
                             break
                         f.write(data)
                 messagebox.showinfo("Success", f"File '{selected_file}' downloaded successfully to '{filepath}'.")
+
             else:
                 messagebox.showerror("Error", f"File '{selected_file}' not found on the server.")
         except Exception as e:
