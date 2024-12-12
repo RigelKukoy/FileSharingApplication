@@ -37,6 +37,13 @@ try:
             filepath = os.path.join(SHARED_DIR, safe_filename)
 
             if os.path.exists(filepath):
+                print(f"Requested file: {safe_filename}")
+                if os.path.exists(filepath):
+                    print(f"File '{safe_filename}' found.")
+                    # Rest of the file sending code
+                else:
+                    print(f"File '{safe_filename}' not found.")
+                    
                 client_socket.send("FILE_FOUND".encode())
                 with open(filepath, 'rb') as f:
                     while (data := f.read(BUFFER_SIZE)):
