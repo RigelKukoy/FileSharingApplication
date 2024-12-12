@@ -25,26 +25,24 @@ try:
         try:
             # Send the list of available files
             files = os.listdir(SHARED_DIR)
-            if not files:
-                files_list = "No files available"
-            else:
-                files_list = "\n".join(files)
+            files_list = "\n".join(files) if files else "No files available"
             client_socket.send(files_list.encode())
 
             # Receive the requested filename
             filename = client_socket.recv(BUFFER_SIZE).decode().strip()
+            if not filename:
+                client_socket.send("INVALID_REQUEST".encode())
+                print(f"Invalid file request from {client_address}")
+                continue
+
             safe_filename = os.path.basename(filename)  # Sanitize file name
             filepath = os.path.join(SHARED_DIR, safe_filename)
 
             if os.path.exists(filepath):
-                print(f"Requested file: {safe_filename}")
-                if os.path.exists(filepath):
-                    print(f"File '{safe_filename}' found.")
-                    # Rest of the file sending code
-                else:
-                    print(f"File '{safe_filename}' not found.")
-                    
                 client_socket.send("FILE_FOUND".encode())
+                print(f"File '{safe_filename}' found, preparing to send.")
+
+                # Send the file
                 with open(filepath, 'rb') as f:
                     while (data := f.read(BUFFER_SIZE)):
                         client_socket.send(data)
