@@ -50,6 +50,8 @@ def download_file():
 
             # Check server response
             response = client_socket.recv(BUFFER_SIZE).decode()
+            print(f"Server response: {response}")
+
             if response == "FILE_FOUND":
                 filepath = f"downloads/{selected_file}"
                 with open(filepath, 'wb') as f:
@@ -59,6 +61,8 @@ def download_file():
                             break
                         f.write(data)
                 messagebox.showinfo("Success", f"File '{selected_file}' downloaded successfully to '{filepath}'.")
+            elif response == "FILE_NOT_FOUND":
+                print(f"File '{selected_file}' not found on the server.")
 
             else:
                 messagebox.showerror("Error", f"File '{selected_file}' not found on the server.")
