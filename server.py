@@ -20,25 +20,32 @@ print(f"Server listening on {SERVER_HOST}:{SERVER_PORT}...")
 try:
     while True:
         client_socket, client_address = server_socket.accept()
-        print(f"Connection established with {client_address}")
+        print(f"\nConnection established with {client_address}")
 
         try:
             # Send the list of available files
             files = os.listdir(SHARED_DIR)
+            print(f"Files in shared directory: {files}")
             files_list = "\n".join(files) if files else "No files available"
             client_socket.send(files_list.encode())
 
             # Receive the requested filename
             filename = client_socket.recv(BUFFER_SIZE).decode().strip()
+            print(f"Filename received from client: '{filename}'")
             if not filename:
                 client_socket.send("INVALID_REQUEST".encode())
                 print(f"Invalid file request from {client_address}")
                 continue
 
+            # Sanitize filename and check if it exists
             safe_filename = os.path.basename(filename)  # Sanitize file name
             filepath = os.path.join(SHARED_DIR, safe_filename)
+            print(f"Sanitized filename: '{safe_filename}'")
 
             if os.path.exists(filepath):
+                print(f"Sanitized filename: '{safe_filename}'")
+                print(f"File exists: {os.path.exists(filepath)}")
+
                 client_socket.send("FILE_FOUND".encode())
                 print(f"File '{safe_filename}' found, preparing to send.")
 
