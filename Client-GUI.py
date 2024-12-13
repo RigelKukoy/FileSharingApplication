@@ -1,38 +1,44 @@
 import customtkinter as ctk
 import tkinter as tk
 import tkinter.messagebox as messagebox
+import time
+import os
 from ClientLogic import FileDownloadClient
 
 class FileDownloadApp(ctk.CTk):
     def __init__(self):
         """Initialize the File Download Application"""
+        # Use CustomTkinter initialization
         super().__init__()
         
-        # Configure application appearance
-        self._configure_appearance()
+        # Set color theme before creating widgets
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+        
+        # Configure application window
+        self.title("Modern File Downloader")
+        self.geometry("500x650")
         
         # Create network client
         self.client = FileDownloadClient()
         
+        # Track last known download status
+        self.last_status_timestamp = 0
+        
         # Set up user interface
-        self._create_main_layout()
-        self._create_title()
-        self._create_file_list()
-        self._create_control_buttons()
+        self._setup_main_frame()
+        self._setup_title()
+        self._setup_file_list()
+        self._setup_control_buttons()
+        self._setup_status_label()
         
         # Initial file list refresh
-        self.refresh_file_list()
-    
-    def _configure_appearance(self):
-        """Set up application visual settings"""
-        self.title("Modern File Downloader")
-        self.geometry("500x600")
+        self._refresh_file_list()
         
-        # Set color theme
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
+        # Set up periodic download status check
+        self._download_status_check()
     
-    def _create_main_layout(self):
+    def _setup_main_frame(self):
         """Create the main container frame"""
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(
@@ -42,7 +48,7 @@ class FileDownloadApp(ctk.CTk):
             expand=True
         )
     
-    def _create_title(self):
+    def _setup_title(self):
         """Create and position the application title"""
         self.title_label = ctk.CTkLabel(
             self.main_frame, 
@@ -53,7 +59,7 @@ class FileDownloadApp(ctk.CTk):
             pady=(20, 10)
         )
     
-    def _create_file_list(self):
+    def _setup_file_list(self):
         """Create the file list container and listbox"""
         # List container
         self.list_frame = ctk.CTkScrollableFrame(
@@ -85,7 +91,7 @@ class FileDownloadApp(ctk.CTk):
             expand=True
         )
     
-    def _create_control_buttons(self):
+    def _setup_control_buttons(self):
         """Create refresh and download buttons"""
         # Button container
         self.button_frame = ctk.CTkFrame(
@@ -102,7 +108,7 @@ class FileDownloadApp(ctk.CTk):
         self.refresh_button = ctk.CTkButton(
             self.button_frame, 
             text="Refresh File List", 
-            command=self.refresh_file_list,
+            command=self._refresh_file_list,
             corner_radius=10
         )
         self.refresh_button.pack(
@@ -115,9 +121,10 @@ class FileDownloadApp(ctk.CTk):
         self.download_button = ctk.CTkButton(
             self.button_frame, 
             text="Download File", 
-            command=self.download_file,
+            command=self._download_file,
             corner_radius=10,
-            fg_color="green"
+            fg_color="green",
+            hover_color="darkgreen"
         )
         self.download_button.pack(
             side="right", 
@@ -125,7 +132,18 @@ class FileDownloadApp(ctk.CTk):
             padx=5
         )
     
-    def refresh_file_list(self):
+    def _setup_status_label(self):
+        """Create a status label to show download progress"""
+        self.status_label = ctk.CTkLabel(
+            self.main_frame, 
+            text="",
+            font=("Roboto", 14)
+        )
+        self.status_label.pack(
+            pady=10
+        )
+    
+    def _refresh_file_list(self):
         """
         Refresh the list of files from the server
         
@@ -141,7 +159,7 @@ class FileDownloadApp(ctk.CTk):
             if files:
                 # Add non-empty files to listbox
                 for file in files:
-                    if file.strip():
+                    if file and file.strip():
                         self.file_listbox.insert(tk.END, file)
             else:
                 # Show error if no files retrieved
@@ -157,7 +175,7 @@ class FileDownloadApp(ctk.CTk):
                 f"Connection error: {e}"
             )
     
-    def download_file(self):
+    def _download_file(self):
         """
         Download the selected file
         
@@ -180,11 +198,11 @@ class FileDownloadApp(ctk.CTk):
             # Attempt file download
             success, message = self.client.download_file(selected_file)
             
-            # Show appropriate message based on download result
+            # Update status label
             if success:
-                messagebox.showinfo("Success", message)
+                self.status_label.configure(text=f"Downloading: {selected_file}", text_color="white")
             else:
-                messagebox.showerror("Error", message)
+                self.status_label.configure(text=message, text_color="red")
         
         except Exception as e:
             # Handle any unexpected errors
@@ -192,9 +210,46 @@ class FileDownloadApp(ctk.CTk):
                 "Error", 
                 f"An unexpected error occurred: {e}"
             )
+    
+    def _download_status_check(self):
+        """
+        Periodically check download status and display results
+        """
+        # Check current download status
+        status = self.client.check_download_status()
+        
+        # Only process if status has changed and is not None
+        if (status['status'] is not None and 
+            status['timestamp'] > self.last_status_timestamp):
+            
+            # Update last known timestamp
+            self.last_status_timestamp = status['timestamp']
+            
+            # Update status label
+            if status['status']:
+                self.status_label.configure(
+                    text=status['message'], 
+                    text_color="green"
+                )
+                # Show success message box
+                messagebox.showinfo("Download Complete", status['message'])
+            else:
+                self.status_label.configure(
+                    text=status['message'], 
+                    text_color="red"
+                )
+                # Show error message box
+                messagebox.showerror("Download Error", status['message'])
+        
+        # Schedule next check (reduced interval for more responsive updates)
+        self.after(200, self._download_status_check)
 
 def main():
     """Create and run the application"""
+    # Ensure downloads directory exists
+    os.makedirs("downloads", exist_ok=True)
+    
+    # Create and run the application
     app = FileDownloadApp()
     app.mainloop()
 

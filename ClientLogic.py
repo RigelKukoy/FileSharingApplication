@@ -1,9 +1,12 @@
 import socket
 import os
+import threading
 import tkinter.messagebox as messagebox
+import queue
+import time
 
 class FileDownloadClient:
-    def __init__(self, server_host='172.20.10.14', server_port=5001, buffer_size=1024):
+    def __init__(self, server_host='192.168.1.6', server_port=5001, buffer_size=1024):
         """
         Initialize the File Download Client
         
@@ -14,6 +17,13 @@ class FileDownloadClient:
         self.SERVER_HOST = server_host
         self.SERVER_PORT = server_port
         self.BUFFER_SIZE = buffer_size
+        self.download_status = {
+            'status': None,
+            'message': '',
+            'timestamp': 0
+        }
+        self.download_lock = threading.Lock()
+        self.is_downloading = False
     
     def get_file_list(self):
         """
@@ -30,16 +40,12 @@ class FileDownloadClient:
             print(f"Error retrieving file list: {e}")
             return None
     
-    def download_file(self, selected_file):
+    def _download_worker(self, selected_file):
         """
-        Download a specific file from the server
+        Background worker for file download
         
         :param selected_file: Name of the file to download
-        :return: Tuple (success, message)
         """
-        if not selected_file:
-            return False, "No file selected."
-        
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
                 client_socket.connect((self.SERVER_HOST, self.SERVER_PORT))
@@ -66,11 +72,79 @@ class FileDownloadClient:
                                 break
                             f.write(data)
                     
-                    return True, f"File '{selected_file}' downloaded successfully."
+                    # Update download status
+                    with self.download_lock:
+                        self.download_status = {
+                            'status': True,
+                            'message': f"File '{selected_file}' downloaded successfully.",
+                            'timestamp': time.time()
+                        }
                 elif response == "FILE_NOT_FOUND":
-                    return False, f"File '{selected_file}' was not found on the server."
+                    # Update download status
+                    with self.download_lock:
+                        self.download_status = {
+                            'status': False,
+                            'message': f"File '{selected_file}' was not found on the server.",
+                            'timestamp': time.time()
+                        }
                 else:
-                    return False, "Invalid server response."
+                    # Update download status
+                    with self.download_lock:
+                        self.download_status = {
+                            'status': False,
+                            'message': "Invalid server response.",
+                            'timestamp': time.time()
+                        }
         
         except Exception as e:
-            return False, f"An error occurred: {e}"
+            # Update download status
+            with self.download_lock:
+                self.download_status = {
+                    'status': False,
+                    'message': f"An error occurred: {e}",
+                    'timestamp': time.time()
+                }
+        finally:
+            self.is_downloading = False
+    
+    def download_file(self, selected_file):
+        """
+        Initiate file download in a background thread
+        
+        :param selected_file: Name of the file to download
+        :return: Tuple (success, message)
+        """
+        if not selected_file:
+            return False, "No file selected."
+        
+        if self.is_downloading:
+            return False, "A download is already in progress."
+        
+        # Reset download status
+        with self.download_lock:
+            self.download_status = {
+                'status': None,
+                'message': '',
+                'timestamp': 0
+            }
+        
+        self.is_downloading = True
+        
+        # Start download in a separate thread
+        download_thread = threading.Thread(
+            target=self._download_worker, 
+            args=(selected_file,)
+        )
+        download_thread.start()
+        
+        return True, "Download started."
+    
+    def check_download_status(self):
+        """
+        Check the current download status
+        
+        :return: Download status dictionary
+        """
+        with self.download_lock:
+            # Return a copy of the status to prevent race conditions
+            return dict(self.download_status)
